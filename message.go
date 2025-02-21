@@ -7,8 +7,8 @@ import (
 )
 
 type IBroker interface {
-	Publish(context.Context, string, string, *string) error
-	Subscribe(context.Context, Configuration, func(context.Context, IMessage)) error
+	Publish(ctx context.Context, queue string, groupId *string, data *string) error
+	Subscribe(ctx context.Context, conf Configuration, fn func(context.Context, IMessage)) error
 }
 
 type Configuration struct {
@@ -43,7 +43,7 @@ func NewMessage(
 			select {
 			case <-vc.Done():
 				return
-			case <-time.After(20 * time.Second):
+			case <-time.After(15 * time.Second):
 				if err := changeVisibility(vc, int32(30)); err != nil {
 					if !strings.HasSuffix(err.Error(), context.Canceled.Error()) {
 						errorSub <- err

@@ -48,10 +48,10 @@ func NewSqs(cfg *AwsConfig) IBroker {
 	}
 }
 
-func (r *sqsBroker) Publish(ctx context.Context, queue string, groupId string, data *string) error {
+func (r *sqsBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
 	_, err := r.sqsSvc.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:       &queue,
-		MessageGroupId: &groupId,
+		MessageGroupId: groupId,
 		MessageBody:    data,
 	})
 	return err
@@ -80,7 +80,7 @@ func (r *sqsBroker) Subscribe(ctx context.Context, conf Configuration, fn func(c
 				output, err := r.sqsSvc.ReceiveMessage(context.Background(), &sqs.ReceiveMessageInput{
 					QueueUrl:          aws.String(conf.Queue),
 					WaitTimeSeconds:   15,
-					VisibilityTimeout: 60,
+					VisibilityTimeout: 30,
 					AttributeNames:    []types.QueueAttributeName{"MessageGroupId"},
 				})
 				if err != nil {
