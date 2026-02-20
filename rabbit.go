@@ -16,20 +16,11 @@ type RabbitBroker struct {
 }
 
 type RabbitConfig struct {
-	URL      string
-	Username string
-	Password string
+	URL string
 }
 
 func NewRabbit(cfg *RabbitConfig) IBroker {
-	url := cfg.URL
-	if cfg.Username != "" && cfg.Password != "" {
-		url = fmt.Sprintf("amqp://%s:%s@%s", cfg.Username, cfg.Password, cfg.URL)
-	} else if cfg.URL == "" {
-		url = "amqp://guest:guest@localhost:5672/"
-	}
-
-	conn, err := amqp.Dial(url)
+	conn, err := amqp.Dial(cfg.URL)
 	if err != nil {
 		panic(fmt.Errorf("failed to connect to RabbitMQ: %w", err))
 	}
