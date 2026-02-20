@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type sqsBroker struct {
+type SqsBroker struct {
 	config *AwsConfig
 	sqsSvc *sqsextendedclient.Client
 }
@@ -42,13 +42,13 @@ func NewSqs(cfg *AwsConfig) IBroker {
 		sqsextendedclient.WithS3BucketName(cfg.S3Bucket),
 	)
 
-	return &sqsBroker{
+	return &SqsBroker{
 		config: cfg,
 		sqsSvc: sqsSvc,
 	}
 }
 
-func (r *sqsBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
+func (r *SqsBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
 	_, err := r.sqsSvc.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:       &queue,
 		MessageGroupId: groupId,
@@ -57,7 +57,7 @@ func (r *sqsBroker) Publish(ctx context.Context, queue string, groupId *string, 
 	return err
 }
 
-func (r *sqsBroker) Subscribe(ctx context.Context, conf Configuration, fn func(context.Context, IMessage)) error {
+func (r *SqsBroker) Subscribe(ctx context.Context, conf Configuration, fn func(context.Context, IMessage)) error {
 	var messageCount int32 = 0
 	message := make(chan IMessage, conf.MaxMessages)
 	errSub := make(chan error, conf.MaxMessages)
@@ -125,7 +125,7 @@ func (r *sqsBroker) Subscribe(ctx context.Context, conf Configuration, fn func(c
 	return g.Wait()
 }
 
-func (r *sqsBroker) deleteMessage(queue string, msg types.Message) error {
+func (r *SqsBroker) deleteMessage(queue string, msg types.Message) error {
 	_, err := r.sqsSvc.DeleteMessage(context.Background(), &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(queue),
 		ReceiptHandle: msg.ReceiptHandle,
@@ -133,7 +133,7 @@ func (r *sqsBroker) deleteMessage(queue string, msg types.Message) error {
 	return err
 }
 
-func (r *sqsBroker) changeVisibility(ctx context.Context, queue string, msg types.Message, timeout int32) error {
+func (r *SqsBroker) changeVisibility(ctx context.Context, queue string, msg types.Message, timeout int32) error {
 	_, err := r.sqsSvc.ChangeMessageVisibility(ctx, &sqs.ChangeMessageVisibilityInput{
 		QueueUrl:          aws.String(queue),
 		ReceiptHandle:     msg.ReceiptHandle,

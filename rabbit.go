@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type rabbitBroker struct {
+type RabbitBroker struct {
 	conn   *amqp.Connection
 	config *RabbitConfig
 }
@@ -34,13 +34,13 @@ func NewRabbit(cfg *RabbitConfig) IBroker {
 		panic(fmt.Errorf("failed to connect to RabbitMQ: %w", err))
 	}
 
-	return &rabbitBroker{
+	return &RabbitBroker{
 		conn:   conn,
 		config: cfg,
 	}
 }
 
-func (r *rabbitBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
+func (r *RabbitBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
 	ch, err := r.conn.Channel()
 	if err != nil {
 		return fmt.Errorf("failed to open channel: %w", err)
@@ -84,7 +84,7 @@ func (r *rabbitBroker) Publish(ctx context.Context, queue string, groupId *strin
 	return nil
 }
 
-func (r *rabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn func(context.Context, IMessage)) error {
+func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn func(context.Context, IMessage)) error {
 	ch, err := r.conn.Channel()
 	if err != nil {
 		return fmt.Errorf("failed to open channel: %w", err)
