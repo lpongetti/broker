@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.58.2
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.34.3
 	github.com/co-go/sqs-extended-client-go v1.4.3
+	github.com/rabbitmq/amqp091-go v1.10.0
 	golang.org/x/sync v0.7.0
 )
 
