@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"golang.org/x/sync/errgroup"
@@ -159,11 +158,6 @@ func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn fun
 						return d.Ack(false)
 					},
 					groupId,
-					func(vctx context.Context, timeout int32) error {
-						// RabbitMQ non ha un equivalente diretto di changeVisibility
-						// Possiamo usare Nack con requeue per rimandare il messaggio
-						return d.Nack(false, true)
-					},
 					errSub,
 				)
 			}
@@ -193,29 +187,16 @@ func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn fun
 	return g.Wait()
 }
 
-// NewRabbitMessage crea un nuovo messaggio RabbitMQ compatibile con l'interfaccia IMessage
 func NewRabbitMessage(
 	body []byte,
 	ack func() error,
 	groupId string,
-	changeVisibility func(context.Context, int32) error,
 	errorSub chan error,
 ) *Message {
 	vc, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		for {
-			select {
-			case <-vc.Done():
-				return
-			case <-time.After(15 * time.Second):
-				if err := changeVisibility(vc, int32(30)); err != nil {
-					if err != context.Canceled {
-						errorSub <- err
-					}
-				}
-			}
-		}
+		<-vc.Done()
 	}()
 
 	return &Message{body, ack, groupId, cancel}
