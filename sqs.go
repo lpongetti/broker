@@ -2,7 +2,9 @@ package broker
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -36,11 +38,14 @@ func NewSqs(cfg *AwsConfig) IBroker {
 		panic(err)
 	}
 
-	sqsSvc, _ := sqsextendedclient.New(
+	sqsSvc, err := sqsextendedclient.New(
 		sqs.NewFromConfig(awsCfg),
 		s3.NewFromConfig(awsCfg),
 		sqsextendedclient.WithS3BucketName(cfg.S3Bucket),
 	)
+	if err != nil {
+		panic(fmt.Errorf("failed to create SQS extended client: %w", err))
+	}
 
 	return &SqsBroker{
 		config: cfg,
@@ -49,6 +54,9 @@ func NewSqs(cfg *AwsConfig) IBroker {
 }
 
 func (r *SqsBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
+	if data == nil {
+		return fmt.Errorf("data cannot be nil")
+	}
 	_, err := r.sqsSvc.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:       &queue,
 		MessageGroupId: groupId,
@@ -73,11 +81,11 @@ func (r *SqsBroker) Subscribe(ctx context.Context, conf Configuration, fn func(c
 				}
 				return
 			default:
-
-				if messageCount == int32(conf.MaxMessages) {
+				if atomic.LoadInt32(&messageCount) >= int32(conf.MaxMessages) {
+					time.Sleep(100 * time.Millisecond)
 					continue
 				}
-				output, err := r.sqsSvc.ReceiveMessage(context.Background(), &sqs.ReceiveMessageInput{
+				output, err := r.sqsSvc.ReceiveMessage(gCtx, &sqs.ReceiveMessageInput{
 					QueueUrl:          aws.String(conf.Queue),
 					WaitTimeSeconds:   15,
 					VisibilityTimeout: 30,
@@ -90,14 +98,21 @@ func (r *SqsBroker) Subscribe(ctx context.Context, conf Configuration, fn func(c
 
 				for index := range output.Messages {
 					msg := output.Messages[index]
+					if msg.Body == nil {
+						continue
+					}
 
 					atomic.AddInt32(&messageCount, 1)
+					groupID := ""
+					if msg.Attributes != nil {
+						groupID = msg.Attributes["MessageGroupId"]
+					}
 					message <- NewMessage(
 						[]byte(*msg.Body),
 						func() error {
 							return r.deleteMessage(conf.Queue, msg)
 						},
-						msg.Attributes["MessageGroupId"],
+						groupID,
 						func(vctx context.Context, timeout int32) error {
 							return r.changeVisibility(vctx, conf.Queue, msg, timeout)
 						},

@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -12,6 +13,7 @@ import (
 type RabbitBroker struct {
 	conn   *amqp.Connection
 	config *RabbitConfig
+	mu     sync.Mutex
 }
 
 type RabbitConfig struct {
@@ -30,10 +32,71 @@ func NewRabbit(cfg *RabbitConfig) IBroker {
 	}
 }
 
-func (r *RabbitBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
-	ch, err := r.conn.Channel()
+// getConnection returns the current connection, reconnecting if it was closed.
+func (r *RabbitBroker) getConnection() (*amqp.Connection, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.conn != nil && !r.conn.IsClosed() {
+		return r.conn, nil
+	}
+
+	conn, err := amqp.Dial(r.config.URL)
 	if err != nil {
-		return fmt.Errorf("failed to open channel: %w", err)
+		return nil, fmt.Errorf("failed to reconnect to RabbitMQ: %w", err)
+	}
+
+	if r.conn != nil {
+		_ = r.conn.Close()
+	}
+	r.conn = conn
+	return r.conn, nil
+}
+
+// invalidateConnection marks the connection as closed so the next getConnection will reconnect.
+func (r *RabbitBroker) invalidateConnection() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.conn != nil {
+		_ = r.conn.Close()
+		r.conn = nil
+	}
+}
+
+// Close chiude la connessione RabbitMQ. Da chiamare durante lo shutdown dell'applicazione.
+func (r *RabbitBroker) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.conn != nil {
+		err := r.conn.Close()
+		r.conn = nil
+		return err
+	}
+	return nil
+}
+
+func (r *RabbitBroker) Publish(ctx context.Context, queue string, groupId *string, data *string) error {
+	if data == nil {
+		return fmt.Errorf("data cannot be nil")
+	}
+
+	conn, err := r.getConnection()
+	if err != nil {
+		return err
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		// Connection closed or invalid; force reconnect and retry once
+		r.invalidateConnection()
+		conn, err = r.getConnection()
+		if err != nil {
+			return fmt.Errorf("failed to open channel: %w", err)
+		}
+		ch, err = conn.Channel()
+		if err != nil {
+			return fmt.Errorf("failed to open channel: %w", err)
+		}
 	}
 	defer ch.Close()
 
@@ -75,9 +138,22 @@ func (r *RabbitBroker) Publish(ctx context.Context, queue string, groupId *strin
 }
 
 func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn func(context.Context, IMessage)) error {
-	ch, err := r.conn.Channel()
+	conn, err := r.getConnection()
 	if err != nil {
-		return fmt.Errorf("failed to open channel: %w", err)
+		return err
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		r.invalidateConnection()
+		conn, err = r.getConnection()
+		if err != nil {
+			return fmt.Errorf("failed to open channel: %w", err)
+		}
+		ch, err = conn.Channel()
+		if err != nil {
+			return fmt.Errorf("failed to open channel: %w", err)
+		}
 	}
 	defer ch.Close()
 

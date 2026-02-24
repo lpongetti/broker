@@ -2,7 +2,7 @@ package broker
 
 import (
 	"context"
-	"strings"
+	"errors"
 	"time"
 )
 
@@ -37,15 +37,17 @@ func NewMessage(
 	errorSub chan error,
 ) *Message {
 	vc, cancel := context.WithCancel(context.Background())
+	ticker := time.NewTicker(15 * time.Second)
 
 	go func() {
+		defer ticker.Stop()
 		for {
 			select {
 			case <-vc.Done():
 				return
-			case <-time.After(15 * time.Second):
+			case <-ticker.C:
 				if err := changeVisibility(vc, int32(30)); err != nil {
-					if !strings.HasSuffix(err.Error(), context.Canceled.Error()) {
+					if !errors.Is(err, context.Canceled) {
 						errorSub <- err
 					}
 				}
