@@ -228,7 +228,7 @@ func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn fun
 					groupId = d.MessageId
 				}
 
-				message <- NewRabbitMessage(
+				rabbitMsg := NewRabbitMessage(
 					d.Body,
 					func() error {
 						return d.Ack(false)
@@ -236,6 +236,15 @@ func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn fun
 					groupId,
 					errSub,
 				)
+
+				// Select necessario: message<- può bloccare e impedire di vedere gCtx.Done()
+				select {
+				case <-gCtx.Done():
+					atomic.AddInt32(&messageCount, -1)
+					d.Nack(false, true)
+					return
+				case message <- rabbitMsg:
+				}
 			}
 		}
 	}()
