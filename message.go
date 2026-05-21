@@ -26,6 +26,7 @@ type IMessage interface {
 type Message struct {
 	body                     []byte
 	ack                      func() error
+	nack                     func() error
 	groupId                  string
 	visibilityFunctionCancel context.CancelFunc
 }
@@ -57,7 +58,7 @@ func NewMessage(
 		}
 	}()
 
-	return &Message{body, ack, groupId, cancel}
+	return &Message{body, ack, nack, groupId, cancel}
 }
 
 func (m *Message) Body() []byte {
@@ -69,8 +70,9 @@ func (m *Message) Ack() error {
 	return m.ack()
 }
 
-func (m *Message) Nack() {
+func (m *Message) Nack() error {
 	m.visibilityFunctionCancel()
+	return m.nack()
 }
 
 func (m *Message) GroupID() string {

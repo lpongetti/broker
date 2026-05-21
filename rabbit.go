@@ -278,6 +278,7 @@ func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn fun
 func NewRabbitMessage(
 	body []byte,
 	ack func() error,
+	nack func() error,
 	groupId string,
 	errorSub chan error,
 ) *Message {
@@ -287,5 +288,5 @@ func NewRabbitMessage(
 		<-vc.Done()
 	}()
 
-	return &Message{body, ack, groupId, cancel}
+	return &Message{body, ack, nack, groupId, cancel}
 }
