@@ -19,6 +19,7 @@ type Configuration struct {
 type IMessage interface {
 	Body() []byte
 	Ack() error
+	Nack() error
 	GroupID() string
 }
 
@@ -32,6 +33,7 @@ type Message struct {
 func NewMessage(
 	body []byte,
 	ack func() error,
+	nack func() error,
 	groupId string,
 	changeVisibility func(context.Context, int32) error,
 	errorSub chan error,
@@ -65,6 +67,10 @@ func (m *Message) Body() []byte {
 func (m *Message) Ack() error {
 	m.visibilityFunctionCancel()
 	return m.ack()
+}
+
+func (m *Message) Nack() {
+	m.visibilityFunctionCancel()
 }
 
 func (m *Message) GroupID() string {

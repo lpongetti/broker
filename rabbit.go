@@ -233,6 +233,9 @@ func (r *RabbitBroker) Subscribe(ctx context.Context, conf Configuration, fn fun
 					func() error {
 						return d.Ack(false)
 					},
+					func() error {
+						return d.Nack(false, true)
+					},
 					groupId,
 					errSub,
 				)

@@ -112,6 +112,9 @@ func (r *SqsBroker) Subscribe(ctx context.Context, conf Configuration, fn func(c
 						func() error {
 							return r.deleteMessage(conf.Queue, msg)
 						},
+						func() error {
+							return r.changeVisibility(context.Background(), conf.Queue, msg, 0)
+						},
 						groupID,
 						func(vctx context.Context, timeout int32) error {
 							return r.changeVisibility(vctx, conf.Queue, msg, timeout)
